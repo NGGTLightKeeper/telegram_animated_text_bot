@@ -5,6 +5,8 @@ MYSQL_USER = 'root'
 MYSQL_PASSWORD = 'Og23062008og@'
 MYSQL_DB = 'testtgbot'
 
+PRINT_MESSAGE_DATA = True
+
 
 NAME_BTN_BACK = "🔙 Назад"
 NAME_BTN_HELP = "⚙️ Помощь"

@@ -12,11 +12,14 @@ BASE_DIR = Path(__file__).resolve().parent
 from telegram_bot_db.models import MessagesModel
 from settings.settings import *
 from telebot.types import InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup
+from telebot import util
+import re
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-
+# Working with MySQL database
 class DataBase:
+    # Save message to the database
     def save_message(message, mid):
         MessagesModel.objects.create(
                     user = message.chat.id,
@@ -25,7 +28,20 @@ class DataBase:
                     timestamp = timezone.now(),
                 )
 
+# Animation types
+ANIMATION_TYPES = [
+    ('1', 'Message by MID'),
+    ('2', 'Message by MID (Hidden after animation)'),
+    ('3', 'Message by Text (For short messages)'),
+    ('4', 'Message by Text (For short messages and Hidden after animation)'),
+]
 
+# Escape Markdown v2 characters
+def escape_md_v2(text: str) -> str:
+    return re.sub(r'([\_\*\[\]\(\)\~\`\>\#\+\-\=\|\{\}\.\!])', r'\\\1', text)
+
+
+# Hanfler start message
 @bot.message_handler(commands=['start'])
 def command_start(message):
     try:
@@ -43,6 +59,7 @@ def command_start(message):
     except Exception as e:
         print(f"ERROR (command_start):\n{e}")
 
+# Hanfler help message
 @bot.message_handler(commands=['help'])
 def command_help(message):
     try:
@@ -60,6 +77,7 @@ def command_help(message):
         print(f"ERROR (command_help):\n{e}")
 
 
+# Hanfler other messages
 @bot.message_handler(func=lambda message: True)
 def message(message):
     try:
@@ -71,6 +89,7 @@ def message(message):
         print(f"ERROR (message):\n{e}")
 
 
+# Callback query handler
 @bot.callback_query_handler(func=lambda call: True)
 def callback(call):
     try:
@@ -101,36 +120,35 @@ def callback(call):
     except Exception as e:
         print(f"ERROR (callback):\n{e}")
 
-
 # Inline query handler
 @bot.inline_handler(lambda query: True)
 def inline_query_handler(inline_query):
     text = inline_query.query.strip()
     results = []
 
-    # Check if the inline query is not empty
     if text:
-        # Add inline query results
-        markup = InlineKeyboardMarkup().add(
-            InlineKeyboardButton(text="Start", callback_data="startanimation")
-        )
-        results.append(
-            InlineQueryResultArticle(
-                id=inline_query.id,
-                title="Send animation",
-                input_message_content=InputTextMessageContent("Please wait..."),
-                reply_markup=markup
+        for anim_id, anim_title in ANIMATION_TYPES:
+            # Add inline query results
+            markup = InlineKeyboardMarkup().add(
+                InlineKeyboardButton(text="Start", callback_data="startanimation")
             )
-        )
+            results.append(
+                InlineQueryResultArticle(
+                    id=anim_id,
+                    title=f"{anim_title}",
+                    input_message_content=InputTextMessageContent("Please wait..."),
+                    reply_markup=markup
+                )
+            )
     else:
-        # If the inline query is empty, show a message
         results.append(
             InlineQueryResultArticle(
                 id='empty',
                 title="Input text",
-                input_message_content=InputTextMessageContent('Input Text or MessageID to send animation')
+                input_message_content=InputTextMessageContent("Input Text or MessageID to send animation"),
             )
         )
+
     bot.answer_inline_query(inline_query.id, results, cache_time=0)
 
 
@@ -143,38 +161,54 @@ def chosen_inline_result(chosen):
     text = chosen.query.strip()
     if not inline_msg_id:
         return
-    
-    # Check if the first character is a digit
-    if text and text[0].isdigit():
-        # Try getting the message from the database by ID
-        AMID = text
-        try:
-            mess_queryset = MessagesModel.objects.filter(mid=text)[0]
-            mess = mess_queryset.message
-        # If the message is not found, return an error message
-        except Exception:
-            mess = "Error"
-    else:
-        # If the first character is not a digit, use the text itself
+
+
+    # Check user selected result
+    if chosen.result_id == 'empty':
+        # If the user selected the empty result, return
+        bot.edit_message_text(inline_message_id=inline_msg_id, text="Please input text or message ID")
+        return
+
+    elif chosen.result_id == '1' or chosen.result_id == '2':
+        # Check if the first character is a digit
+        if text and text[0].isdigit():
+            # Try getting the message from the database by ID
+            AMID = text
+            try:
+                mess_queryset = MessagesModel.objects.filter(mid=text)[0]
+                mess = mess_queryset.message
+            # If the message is not found, return an error message
+            except Exception:
+                mess = "Error"
+        else:
+            # If the first character is not a digit, use the text itself
+            AMID = None
+            mess = "Input correct Message ID"
+
+    elif chosen.result_id == '3' or chosen.result_id == '4':
+        # Set AMID to None for text messages
         AMID = None
         mess = text
 
+
     # Print Animation data
-    print("\n")
-    print("User ID: " + str(chosen.from_user.id))
-    print("User: " + str(chosen.from_user.username) + ", " + str(chosen.from_user.first_name) + " " + str(chosen.from_user.last_name))
-    print("Inline message ID: " + str(inline_msg_id))
-    print("Animation Message ID: " + str(AMID))
-    print("\nMessage:\n" + str(mess))
-    print("\n")
+    if PRINT_MESSAGE_DATA:
+        print("\n")
+        print("User ID: " + str(chosen.from_user.id))
+        print("User: " + str(chosen.from_user.username) + ", " + str(chosen.from_user.first_name) + " " + str(chosen.from_user.last_name))
+        print("Inline message ID: " + str(inline_msg_id))
+        print("Animation Message ID: " + str(AMID))
+        print("\nMessage:\n" + str(mess))
+        print("\n")
+
 
     # Check message
     if mess == "Error":
         bot.edit_message_text(inline_message_id=inline_msg_id, text=mess)
         return
 
+
     # Prepare chat message for animation
-    mess_array = mess.split()
     full_mess = "ᅠ"
     bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess)
     time.sleep(1)
@@ -207,15 +241,31 @@ def chosen_inline_result(chosen):
                     chunk = text[:chunk_size]
                     text = text[chunk_size:]
                     full_mess += chunk
-                    bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess)
+                    bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
                     time.sleep(0.5)
                 except Exception:
                     time.sleep(1)
                 time.sleep(1)
             # Add a new line after each sentence
             full_mess += '. '
-            bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess)
+            bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
             time.sleep(1)
+        # For hidden messges after animation
+        if chosen.result_id == '2' or chosen.result_id == '4':
+            raw = full_mess.rstrip()
+            escaped = escape_md_v2(raw)
+            spoiler = f"||{escaped}||"
+
+            try:
+                bot.edit_message_text(
+                    inline_message_id=inline_msg_id,
+                    text=spoiler,
+                    parse_mode='MarkdownV2',
+                    disable_web_page_preview=True
+                )
+                time.sleep(0.3)
+            except Exception:
+                pass
 
     # For short messages, split into words and animate
     else:
@@ -232,7 +282,7 @@ def chosen_inline_result(chosen):
                     word = word[chunk_size:]
                     full_mess += chunk
                     try:
-                        bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess)
+                        bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
                         time.sleep(0.05)
                     except Exception:
                         time.sleep(0.5)
@@ -243,10 +293,26 @@ def chosen_inline_result(chosen):
             if idx < len(lines) - 1:
                 full_mess = full_mess.rstrip() + '\n'
                 try:
-                    bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess)
+                    bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
                     time.sleep(0.3)
                 except Exception:
                     pass
+        # For hidden messges after animation
+        if chosen.result_id == '2' or chosen.result_id == '4':
+            raw = full_mess.rstrip()
+            escaped = escape_md_v2(raw)
+            spoiler = f"||{escaped}||"
+
+            try:
+                bot.edit_message_text(
+                    inline_message_id=inline_msg_id,
+                    text=spoiler,
+                    parse_mode='MarkdownV2',
+                    disable_web_page_preview=True
+                )
+                time.sleep(0.3)
+            except Exception:
+                pass
 
 
 
