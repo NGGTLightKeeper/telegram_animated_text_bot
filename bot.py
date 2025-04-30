@@ -36,6 +36,8 @@ ANIMATION_TYPES = [
     ('4', 'Message by Text (For short messages and Hidden after animation)'),
     ('5', 'Message with Frames (By MID)'),
     ('6', 'Message with Frames (By MID and Hidden after animation)'),
+    ('7', 'Message with CF (By MID)'),
+    ('8', 'Message with CF (By MID and Hidden after animation)'),
 ]
 
 # Escape Markdown v2 characters
@@ -43,7 +45,61 @@ def escape_md_v2(text: str) -> str:
     return re.sub(r'([\_\*\[\]\(\)\~\`\>\#\+\-\=\|\{\}\.\!])', r'\\\1', text)
 
 # Function to split the message into an array of texts based on the specified rules
-def split_message_into_array(mess):
+def split_frame_message_into_array(mess):
+    result = []
+    
+    # If message doesn't start with '[', return whole message as single item
+    if not mess.startswith('['):
+        return [mess]
+    
+    try:
+        current_pos = 1  # Skip initial '['
+        while current_pos < len(mess):
+            # Skip whitespace
+            while current_pos < len(mess) and mess[current_pos].isspace():
+                current_pos += 1
+            
+            # Check for chunk start
+            if current_pos < len(mess) and mess[current_pos] == '{':
+                chunk_start = current_pos + 1
+                current_pos += 1
+                # Find closing '}'
+                brace_count = 1
+                while current_pos < len(mess) and brace_count > 0:
+                    if mess[current_pos] == '{':
+                        brace_count += 1
+                    elif mess[current_pos] == '}':
+                        brace_count -= 1
+                    current_pos += 1
+                
+                if brace_count == 0:
+                    chunk = mess[chunk_start:current_pos-1]
+                    result.append(chunk)
+                    
+                    # Look for comma or closing bracket
+                    while current_pos < len(mess) and mess[current_pos] not in ',]':
+                        current_pos += 1
+                    
+                    if current_pos < len(mess) and mess[current_pos] == ']':
+                        break
+                    elif current_pos < len(mess) and mess[current_pos] == ',':
+                        current_pos += 1
+                        continue
+            else:
+                break
+                
+        # If we didn't find proper formatting, return original message
+        if not result:
+            return [mess]
+            
+        return result
+        
+    except Exception:
+        # If any error occurs, return original message
+        return [mess]
+
+# Function to split the message into an array of texts based on the specified rules
+def split_cf_message_into_array(mess):
     result = []
     
     # If message doesn't start with '[', return whole message as single item
@@ -227,7 +283,7 @@ def chosen_inline_result(chosen):
         bot.edit_message_text(inline_message_id=inline_msg_id, text="Please input text or message ID")
         return
 
-    elif chosen.result_id == '1' or chosen.result_id == '2' or chosen.result_id == '5' or chosen.result_id == '6':
+    elif chosen.result_id == '1' or chosen.result_id == '2' or chosen.result_id == '5' or chosen.result_id == '6' or chosen.result_id == '7' or chosen.result_id == '8':
         # Check if the first character is a digit
         if text and text[0].isdigit():
             # Try getting the message from the database by ID
@@ -243,16 +299,20 @@ def chosen_inline_result(chosen):
             AMID = None
             mess = "Input correct Message ID"
 
+
+        # Check structure Message with Frames
+        if chosen.result_id == '5' or chosen.result_id == '6':
+            # Check if the message starts with "[" and ends with "]"
+            message_chunks = split_frame_message_into_array(mess)
+
+        elif chosen.result_id == '7' or chosen.result_id == '8':
+            # Check if the message starts with "[" and ends with "]"
+            message_chunks = split_cf_message_into_array(mess)
+
     elif chosen.result_id == '3' or chosen.result_id == '4':
         # Set AMID to None for text messages
         AMID = None
         mess = text
-
-
-    # Check structure Message with Frames
-    if chosen.result_id == '5' or chosen.result_id == '6':
-        # Check if the message starts with "[" and ends with "]"
-        message_chunks = split_message_into_array(mess)
 
 
     # Print Animation data
@@ -316,6 +376,7 @@ def chosen_inline_result(chosen):
                 full_mess += '. '
                 bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
                 time.sleep(1)
+
             # For hidden messges after animation
             if chosen.result_id == '2' or chosen.result_id == '4':
                 raw = full_mess.rstrip()
@@ -363,6 +424,7 @@ def chosen_inline_result(chosen):
                         time.sleep(0.3)
                     except Exception:
                         pass
+
             # For hidden messges after animation
             if chosen.result_id == '2' or chosen.result_id == '4':
                 raw = full_mess.rstrip()
@@ -413,6 +475,28 @@ def chosen_inline_result(chosen):
                     except Exception:
                         pass
             time.sleep(3)
+
+        # For hidden messges after animation
+        if chosen.result_id == '6':
+            raw = full_mess.rstrip()
+            escaped = escape_md_v2(raw)
+            spoiler = f"||{escaped}||"
+
+            try:
+                bot.edit_message_text(
+                    inline_message_id=inline_msg_id,
+                    text=spoiler,
+                    parse_mode='MarkdownV2',
+                    disable_web_page_preview=True
+                )
+                time.sleep(0.3)
+            except Exception:
+                pass
+    elif chosen.result_id == '7' or chosen.result_id == '8':
+        for fid, frame in enumerate(message_chunks):
+            bot.edit_message_text(inline_message_id=inline_msg_id, text=frame, parse_mode='Markdown', disable_web_page_preview=True)
+            time.sleep(0.2)
+
         # For hidden messges after animation
         if chosen.result_id == '6':
             raw = full_mess.rstrip()
