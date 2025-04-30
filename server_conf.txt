@@ -1,0 +1,105 @@
+Structure:
+    env:
+        core:
+            telegram_bot_core (v 2.1)
+        projects:
+            telegram_text_bot
+        venv
+
+
+Installing:
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update && sudo apt upgrade
+sudo apt install python3.13
+sudo update-alternatives --install /usr/bin/python python python/usr/bin/python3.13 0
+sudo apt install apache2
+sudo a2enmod proxy
+sudo a2enmod proxy_http
+sudo a2enmod proxy_balancer
+sudo a2enmod lbmethod_byrequests
+systemctl restart apache2
+sudo apt install mysql-server mysql-client
+sudo apt install php libapache2-mod-php php-mysql
+sudo apt install php-redis php-zip
+sudo systemctl restart apache2
+sudo apt install phpmyadmin
+sudo ln -s /etc/phpmyadmin/apache.conf /etc/apache2/conf-available/phpmyadmin.conf 
+sudo a2enconf phpmyadmin.conf
+sudo systemctl reload apache2.service
+sudo apt install pkg-config
+sudo apt install libmysqlclient-dev
+sudo apt install build-essential
+sudo apt install python3.13-dev
+
+
+Settings:
+python --version
+mysql --version
+sudo mysql_secure_installation
+
+
+MySQL Settings:
+mysql -u root -p
+CREATE USER 'имя_пользователя'@'localhost' IDENTIFIED BY 'пароль';
+GRANT ALL PRIVILEGES ON название_базы_данных.* TO 'имя_пользователя'@'localhost';
+FLUSH PRIVILEGES;
+
+
+Python Settings:
+python3.13 -m venv env/venv
+source env/venv/bin/activate
+python3.13 -m pip install mysqlclient
+python3.13 -m pip install Pillow
+
+
+Project launching:
+    AutoStart:
+        /etc/systemd/system/project.service:
+
+            [Unit]
+            Description=project
+            After=network.target
+
+            [Service]
+            ExecStart=/env/project.sh
+            Restart=always
+            RestartSec=10
+
+            [Install]
+            WantedBy=multi-user.target
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable project.service
+    project.sh:
+
+        #!bin/bash
+        sleep 10
+        source /env/venv/bin/activate
+        export PYTHONPATH="$PYTHONPATH:/env/venv/lib/python3.13/site-packages"
+        export PYTHONPATH="$PYTHONPATH:/env/core/core"
+        python /env/projects/project/main.py
+
+    ERRORS:
+        203/EXEC - Права
+    To DELETE AutoStart:
+        sudo systemctl stop project.service
+        sudo systemctl disable project.service
+        sudo rm /etc/systemd/system/project.service
+        sudo systemctl daemon-reload
+
+
+Settings Apache2:
+    /etc/apache2/sites-available/project.conf:
+
+        <VirtualHost *:80>
+            ServerAdmin webmaster@localhost
+            DocumentRoot /env/projects/telegram_text_bot/static
+            ServerName server_IP
+            
+            ProxyPass / http://localhost:8000/
+            ProxyPassReverse / http://localhost:8000/
+        </VirtualHost>
+
+    sudo a2ensite project.conf
+    sudo systemctl restart apache2
