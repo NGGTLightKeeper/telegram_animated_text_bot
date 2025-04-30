@@ -17,6 +17,7 @@ class MessagesModel(models.Model):
 
 class PendingMessagesModel(models.Model):
     lmid = models.CharField(max_length=255, db_index=True, verbose_name='Pending Message ID', null=True, blank=True)
+    chosen_id = models.CharField(max_length=255, verbose_name='Chosen ID')
     inline_message_id = models.CharField(max_length=255, verbose_name='Inline Message ID')
     message = models.CharField(max_length=255, verbose_name='Message')
     timestamp = models.DateTimeField(default=datetime.datetime(1970, 1, 1, 5, 0, 0), verbose_name="Time:")

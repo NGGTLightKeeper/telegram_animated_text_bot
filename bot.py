@@ -9,7 +9,7 @@ from pathlib import Path
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'telegram_bot_django.settings')
 django.setup()
 BASE_DIR = Path(__file__).resolve().parent
-from telegram_bot_db.models import MessagesModel
+from telegram_bot_db.models import MessagesModel, PendingMessagesModel
 from settings.settings import *
 from telebot.types import InlineQueryResultArticle, InputTextMessageContent, InlineKeyboardButton, InlineKeyboardMarkup
 from telebot import util
@@ -38,6 +38,15 @@ ANIMATION_TYPES = [
     ('6', 'Message with Frames (By MID and Hidden after animation)'),
     ('7', 'Message with CF (By MID)'),
     ('8', 'Message with CF (By MID and Hidden after animation)'),
+
+    ('101', 'Pending Message by MID'),
+    ('102', 'Pending Message by MID (Hidden after animation)'),
+    ('103', 'Pending Message by Text (For short messages)'),
+    ('104', 'Pending Message by Text (For short messages and Hidden after animation)'),
+    ('105', 'Pending Message with Frames (By MID)'),
+    ('106', 'Pending Message with Frames (By MID and Hidden after animation)'),
+    ('107', 'Pending Message with CF (By MID)'),
+    ('108', 'Pending Message with CF (By MID and Hidden after animation)'),
 ]
 
 # Escape Markdown v2 characters
@@ -208,8 +217,52 @@ def callback(call):
     try:
         markup = telebot.types.InlineKeyboardMarkup()
         is_done = False
-            
-        if call.data == 'btn_back_to_start':
+        
+        if 'startanimation' in call.data:
+            # Get PMID
+            parts = call.data.split('_')
+            if len(parts) == 2:
+                pmid = parts[1]
+
+                # Get message from database
+                try:
+                    mess_queryset = PendingMessagesModel.objects.filter(lmid=pmid)[0]
+                    chosen_id = mess_queryset.chosen_id
+                    inline_message_id = mess_queryset.inline_message_id
+                    mess = mess_queryset.message
+
+                    # Animation
+                    # Create a mock chosen object as a dictionary
+                    chosen_data = {
+                        'result_id': chosen_id,
+                        'from_user': {
+                            'id': call.from_user.id,
+                            'is_bot': call.from_user.is_bot,
+                            'first_name': call.from_user.first_name,
+                            'username': call.from_user.username,
+                            'last_name': call.from_user.last_name
+                        },
+                        'location': None,
+                        'inline_message_id': inline_message_id,
+                        'query': mess
+                    }
+                    
+                    # Convert to object-like structure for compatibility
+                    class ChosenInlineResult:
+                        def __init__(self, data):
+                            self.result_id = data['result_id']
+                            self.from_user = type('User', (), data['from_user'])
+                            self.inline_message_id = data['inline_message_id']
+                            self.query = data['query']
+                    
+                    chosen = ChosenInlineResult(chosen_data)
+                    chosen_inline_result(chosen)
+
+                except Exception:
+                    return
+            return
+        
+        elif call.data == 'btn_back_to_start':
             text = open(str(BASE_DIR) + MESS_GREETING, 'r', encoding='utf-8').read()
 
             btn_help = telebot.types.InlineKeyboardButton(text=NAME_BTN_HELP, callback_data="btn_help")
@@ -268,7 +321,6 @@ def inline_query_handler(inline_query):
 # Animation handler
 @bot.chosen_inline_handler(func=lambda chosen: True)
 def chosen_inline_result(chosen):
-    message_chunks = []
 
     # Check inline message ID
     inline_msg_id = getattr(chosen, 'inline_message_id', None)
@@ -277,242 +329,276 @@ def chosen_inline_result(chosen):
         return
 
 
-    # Check user selected result
-    if chosen.result_id == 'empty':
-        # If the user selected the empty result, return
-        bot.edit_message_text(inline_message_id=inline_msg_id, text="Please input text or message ID")
+    # Check type message ( PENDING or ANIMATION )
+    # PENDING
+    if len(chosen.result_id) > 2:
+        pmid = random.randint(100000000000, 999999999999)
+        callback_data = "startanimation_" + str(pmid)
+
+        chosen_result_id = str(int(chosen.result_id) % 100)
+        
+        # Save message in database
+        PendingMessagesModel.objects.create(
+                    lmid = pmid,
+                    chosen_id = chosen_result_id,
+                    inline_message_id = inline_msg_id,
+                    message = text,
+                    timestamp = timezone.now(),
+                )
+        
+        
+        # Message Button
+        markup = telebot.types.InlineKeyboardMarkup()
+        inline_text = "Click on the button"
+        inline_btn = telebot.types.InlineKeyboardButton(text="Start", callback_data=callback_data)
+        markup.add(inline_btn)
+
+        # Edit message with button
+        bot.edit_message_text(inline_message_id=inline_msg_id, text=inline_text, reply_markup=markup)
         return
 
-    elif chosen.result_id == '1' or chosen.result_id == '2' or chosen.result_id == '5' or chosen.result_id == '6' or chosen.result_id == '7' or chosen.result_id == '8':
-        # Check if the first character is a digit
-        if text and text[0].isdigit():
-            # Try getting the message from the database by ID
-            AMID = text
-            try:
-                mess_queryset = MessagesModel.objects.filter(mid=text)[0]
-                mess = mess_queryset.message
-            # If the message is not found, return an error message
-            except Exception:
-                mess = "Error"
-        else:
-            # If the first character is not a digit, use the text itself
+
+    # Check type message ( PENDING or ANIMATION )
+    # ANIMATION
+    else:
+        message_chunks = []
+
+        # Check user selected result
+        if chosen.result_id == 'empty':
+            # If the user selected the empty result, return
+            bot.edit_message_text(inline_message_id=inline_msg_id, text="Please input text or message ID")
+            return
+
+        elif chosen.result_id == '1' or chosen.result_id == '2' or chosen.result_id == '5' or chosen.result_id == '6' or chosen.result_id == '7' or chosen.result_id == '8':
+            # Check if the first character is a digit
+            if text and text[0].isdigit():
+                # Try getting the message from the database by ID
+                AMID = text
+                try:
+                    mess_queryset = MessagesModel.objects.filter(mid=text)[0]
+                    mess = mess_queryset.message
+                # If the message is not found, return an error message
+                except Exception:
+                    mess = "Error"
+            else:
+                # If the first character is not a digit, use the text itself
+                AMID = None
+                mess = "Input correct Message ID"
+
+
+            # Check structure Message with Frames
+            if chosen.result_id == '5' or chosen.result_id == '6':
+                # Check if the message starts with "[" and ends with "]"
+                message_chunks = split_frame_message_into_array(mess)
+
+            elif chosen.result_id == '7' or chosen.result_id == '8':
+                # Check if the message starts with "[" and ends with "]"
+                message_chunks = split_cf_message_into_array(mess)
+
+        elif chosen.result_id == '3' or chosen.result_id == '4':
+            # Set AMID to None for text messages
             AMID = None
-            mess = "Input correct Message ID"
+            mess = text
 
 
-        # Check structure Message with Frames
-        if chosen.result_id == '5' or chosen.result_id == '6':
-            # Check if the message starts with "[" and ends with "]"
-            message_chunks = split_frame_message_into_array(mess)
-
-        elif chosen.result_id == '7' or chosen.result_id == '8':
-            # Check if the message starts with "[" and ends with "]"
-            message_chunks = split_cf_message_into_array(mess)
-
-    elif chosen.result_id == '3' or chosen.result_id == '4':
-        # Set AMID to None for text messages
-        AMID = None
-        mess = text
+        # Print Animation data
+        if PRINT_MESSAGE_DATA:
+            print("\n")
+            print("User ID: " + str(chosen.from_user.id))
+            print("User: " + str(chosen.from_user.username) + ", " + str(chosen.from_user.first_name) + " " + str(chosen.from_user.last_name))
+            print("Inline message ID: " + str(inline_msg_id))
+            print("Animation Message ID: " + str(AMID))
+            print("\nMessage:\n" + str(mess))
+            print("\n")
 
 
-    # Print Animation data
-    if PRINT_MESSAGE_DATA:
-        print("\n")
-        print("User ID: " + str(chosen.from_user.id))
-        print("User: " + str(chosen.from_user.username) + ", " + str(chosen.from_user.first_name) + " " + str(chosen.from_user.last_name))
-        print("Inline message ID: " + str(inline_msg_id))
-        print("Animation Message ID: " + str(AMID))
-        print("\nMessage:\n" + str(mess))
-        print("\n")
+        # Check message
+        if mess == "Error":
+            bot.edit_message_text(inline_message_id=inline_msg_id, text=mess)
+            return
 
 
-    # Check message
-    if mess == "Error":
-        bot.edit_message_text(inline_message_id=inline_msg_id, text=mess)
-        return
+        # Prepare chat message for animation
+        full_mess = "ᅠ"
+        bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess)
+        time.sleep(1)
 
-
-    # Prepare chat message for animation
-    full_mess = "ᅠ"
-    bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess)
-    time.sleep(1)
-
-    # Message animation
-    # For message without frames
-    if chosen.result_id == '1' or chosen.result_id == '2' or chosen.result_id == '3' or chosen.result_id == '4':
-        full_mess = ""
-        # For long messages, split into sentences
-        if len(mess) > 1024:
-            # Split the message into sentences
-            sentences = mess.split('.')
-
-            # Animate each sentence
-            for sentence in sentences:
-                text = sentence.strip()
-
-                # Skip empty sentences
-                if not text:
-                    continue
+        # Message animation
+        # For message without frames
+        if chosen.result_id == '1' or chosen.result_id == '2' or chosen.result_id == '3' or chosen.result_id == '4':
+            full_mess = ""
+            # For long messages, split into sentences
+            if len(mess) > 1024:
+                # Split the message into sentences
+                sentences = mess.split('.')
 
                 # Animate each sentence
-                while text:
-                    # Check if the message is too long
-                    try:
-                        randlen = 1
-                        if len(text) > 50:
-                            randlen = len(text) / 2
-                        else:
-                            randlen = len(text)
-                        chunk_size = random.randint(1, randlen)
-                        chunk = text[:chunk_size]
-                        text = text[chunk_size:]
-                        full_mess += chunk
-                        bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
-                        time.sleep(0.5)
-                    except Exception:
+                for sentence in sentences:
+                    text = sentence.strip()
+
+                    # Skip empty sentences
+                    if not text:
+                        continue
+
+                    # Animate each sentence
+                    while text:
+                        # Check if the message is too long
+                        try:
+                            randlen = 1
+                            if len(text) > 50:
+                                randlen = len(text) / 2
+                            else:
+                                randlen = len(text)
+                            chunk_size = random.randint(1, randlen)
+                            chunk = text[:chunk_size]
+                            text = text[chunk_size:]
+                            full_mess += chunk
+                            bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
+                            time.sleep(0.5)
+                        except Exception:
+                            time.sleep(1)
                         time.sleep(1)
+                    # Add a new line after each sentence
+                    full_mess += '. '
+                    bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
                     time.sleep(1)
-                # Add a new line after each sentence
-                full_mess += '. '
-                bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
-                time.sleep(1)
 
-            # For hidden messges after animation
-            if chosen.result_id == '2' or chosen.result_id == '4':
-                raw = full_mess.rstrip()
-                escaped = escape_md_v2(raw)
-                spoiler = f"||{escaped}||"
+                # For hidden messges after animation
+                if chosen.result_id == '2' or chosen.result_id == '4':
+                    raw = full_mess.rstrip()
+                    escaped = escape_md_v2(raw)
+                    spoiler = f"||{escaped}||"
 
-                try:
-                    bot.edit_message_text(
-                        inline_message_id=inline_msg_id,
-                        text=spoiler,
-                        parse_mode='MarkdownV2',
-                        disable_web_page_preview=True
-                    )
-                    time.sleep(0.3)
-                except Exception:
-                    pass
-
-        # For short messages, split into words and animate
-        else:
-            # Split the message into lines
-            lines = mess.split('\n')
-            for idx, line in enumerate(lines):
-                # Split the line into words
-                words = line.split()
-                for word in words:
-                    # Animate each word
-                    while word:
-                        chunk_size = random.randint(1, len(word))
-                        chunk = word[:chunk_size]
-                        word = word[chunk_size:]
-                        full_mess += chunk
-                        try:
-                            bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
-                            time.sleep(0.05)
-                        except Exception:
-                            time.sleep(0.5)
-                    full_mess += ' '
-                    time.sleep(0.1)
-
-                # Add a new line after each line
-                if idx < len(lines) - 1:
-                    full_mess = full_mess.rstrip() + '\n'
                     try:
-                        bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
+                        bot.edit_message_text(
+                            inline_message_id=inline_msg_id,
+                            text=spoiler,
+                            parse_mode='MarkdownV2',
+                            disable_web_page_preview=True
+                        )
                         time.sleep(0.3)
                     except Exception:
                         pass
 
-            # For hidden messges after animation
-            if chosen.result_id == '2' or chosen.result_id == '4':
-                raw = full_mess.rstrip()
-                escaped = escape_md_v2(raw)
-                spoiler = f"||{escaped}||"
+            # For short messages, split into words and animate
+            else:
+                # Split the message into lines
+                lines = mess.split('\n')
+                for idx, line in enumerate(lines):
+                    # Split the line into words
+                    words = line.split()
+                    for word in words:
+                        # Animate each word
+                        while word:
+                            chunk_size = random.randint(1, len(word))
+                            chunk = word[:chunk_size]
+                            word = word[chunk_size:]
+                            full_mess += chunk
+                            try:
+                                bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
+                                time.sleep(0.05)
+                            except Exception:
+                                time.sleep(0.5)
+                        full_mess += ' '
+                        time.sleep(0.1)
 
-                try:
-                    bot.edit_message_text(
-                        inline_message_id=inline_msg_id,
-                        text=spoiler,
-                        parse_mode='MarkdownV2',
-                        disable_web_page_preview=True
-                    )
-                    time.sleep(0.3)
-                except Exception:
-                    pass
-    # For message with frames
-    elif chosen.result_id == '5' or chosen.result_id == '6':
-        full_mess = ""
-        
-        for fid, frame in enumerate(message_chunks):
+                    # Add a new line after each line
+                    if idx < len(lines) - 1:
+                        full_mess = full_mess.rstrip() + '\n'
+                        try:
+                            bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
+                            time.sleep(0.3)
+                        except Exception:
+                            pass
+
+                # For hidden messges after animation
+                if chosen.result_id == '2' or chosen.result_id == '4':
+                    raw = full_mess.rstrip()
+                    escaped = escape_md_v2(raw)
+                    spoiler = f"||{escaped}||"
+
+                    try:
+                        bot.edit_message_text(
+                            inline_message_id=inline_msg_id,
+                            text=spoiler,
+                            parse_mode='MarkdownV2',
+                            disable_web_page_preview=True
+                        )
+                        time.sleep(0.3)
+                    except Exception:
+                        pass
+        # For message with frames
+        elif chosen.result_id == '5' or chosen.result_id == '6':
             full_mess = ""
-            lines = frame.split('\n')
-            for idx, line in enumerate(lines):
-                # Split the line into words
-                words = line.split()
-                for word in words:
-                    # Animate each word
-                    while word:
-                        chunk_size = random.randint(1, len(word))
-                        chunk = word[:chunk_size]
-                        word = word[chunk_size:]
-                        full_mess += chunk
+            
+            for fid, frame in enumerate(message_chunks):
+                full_mess = ""
+                lines = frame.split('\n')
+                for idx, line in enumerate(lines):
+                    # Split the line into words
+                    words = line.split()
+                    for word in words:
+                        # Animate each word
+                        while word:
+                            chunk_size = random.randint(1, len(word))
+                            chunk = word[:chunk_size]
+                            word = word[chunk_size:]
+                            full_mess += chunk
+                            try:
+                                bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
+                                time.sleep(0.05)
+                            except Exception:
+                                time.sleep(0.5)
+                        full_mess += ' '
+                        time.sleep(0.1)
+
+                    # Add a new line after each line
+                    if idx < len(lines) - 1:
+                        full_mess = full_mess.rstrip() + '\n'
                         try:
                             bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
-                            time.sleep(0.05)
+                            time.sleep(0.3)
                         except Exception:
-                            time.sleep(0.5)
-                    full_mess += ' '
-                    time.sleep(0.1)
+                            pass
+                time.sleep(3)
 
-                # Add a new line after each line
-                if idx < len(lines) - 1:
-                    full_mess = full_mess.rstrip() + '\n'
-                    try:
-                        bot.edit_message_text(inline_message_id=inline_msg_id, text=full_mess, parse_mode='Markdown', disable_web_page_preview=True)
-                        time.sleep(0.3)
-                    except Exception:
-                        pass
-            time.sleep(3)
+            # For hidden messges after animation
+            if chosen.result_id == '6':
+                raw = full_mess.rstrip()
+                escaped = escape_md_v2(raw)
+                spoiler = f"||{escaped}||"
 
-        # For hidden messges after animation
-        if chosen.result_id == '6':
-            raw = full_mess.rstrip()
-            escaped = escape_md_v2(raw)
-            spoiler = f"||{escaped}||"
+                try:
+                    bot.edit_message_text(
+                        inline_message_id=inline_msg_id,
+                        text=spoiler,
+                        parse_mode='MarkdownV2',
+                        disable_web_page_preview=True
+                    )
+                    time.sleep(0.3)
+                except Exception:
+                    pass
+        elif chosen.result_id == '7' or chosen.result_id == '8':
+            for fid, frame in enumerate(message_chunks):
+                bot.edit_message_text(inline_message_id=inline_msg_id, text=frame, parse_mode='Markdown', disable_web_page_preview=True)
+                time.sleep(0.2)
 
-            try:
-                bot.edit_message_text(
-                    inline_message_id=inline_msg_id,
-                    text=spoiler,
-                    parse_mode='MarkdownV2',
-                    disable_web_page_preview=True
-                )
-                time.sleep(0.3)
-            except Exception:
-                pass
-    elif chosen.result_id == '7' or chosen.result_id == '8':
-        for fid, frame in enumerate(message_chunks):
-            bot.edit_message_text(inline_message_id=inline_msg_id, text=frame, parse_mode='Markdown', disable_web_page_preview=True)
-            time.sleep(0.2)
+            # For hidden messges after animation
+            if chosen.result_id == '6':
+                raw = full_mess.rstrip()
+                escaped = escape_md_v2(raw)
+                spoiler = f"||{escaped}||"
 
-        # For hidden messges after animation
-        if chosen.result_id == '6':
-            raw = full_mess.rstrip()
-            escaped = escape_md_v2(raw)
-            spoiler = f"||{escaped}||"
-
-            try:
-                bot.edit_message_text(
-                    inline_message_id=inline_msg_id,
-                    text=spoiler,
-                    parse_mode='MarkdownV2',
-                    disable_web_page_preview=True
-                )
-                time.sleep(0.3)
-            except Exception:
-                pass
+                try:
+                    bot.edit_message_text(
+                        inline_message_id=inline_msg_id,
+                        text=spoiler,
+                        parse_mode='MarkdownV2',
+                        disable_web_page_preview=True
+                    )
+                    time.sleep(0.3)
+                except Exception:
+                    pass
 
 
 
