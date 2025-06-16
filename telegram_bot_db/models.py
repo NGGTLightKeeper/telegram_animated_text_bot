@@ -23,7 +23,7 @@ class PendingMessagesModel(models.Model):
     timestamp = models.DateTimeField(default=datetime.datetime(1970, 1, 1, 5, 0, 0), verbose_name="Time:")
 
     def __str__(self):
-        return self.user
+        return self.lmid
 
     class Meta:
         verbose_name = "Pending Message"
