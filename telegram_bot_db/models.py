@@ -25,6 +25,7 @@ class PendingMessagesModel(models.Model):
     def __str__(self):
         return self.lmid
 
+
     class Meta:
         verbose_name = "Pending Message"
         verbose_name_plural = "Pending Messages"
