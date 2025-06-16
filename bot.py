@@ -163,7 +163,7 @@ def split_cf_message_into_array(mess):
 
 
 
-# Hanfler start message
+# Handler start message
 @bot.message_handler(commands=['start'])
 def command_start(message):
     try:
@@ -181,7 +181,7 @@ def command_start(message):
     except Exception as e:
         print(f"ERROR (command_start):\n{e}")
 
-# Hanfler help message
+# Handler help message
 @bot.message_handler(commands=['help'])
 def command_help(message):
     try:
@@ -199,7 +199,7 @@ def command_help(message):
         print(f"ERROR (command_help):\n{e}")
 
 
-# Hanfler other messages
+# Handler other messages
 @bot.message_handler(func=lambda message: True)
 def message(message):
     try:
