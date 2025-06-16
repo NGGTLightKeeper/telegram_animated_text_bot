@@ -583,8 +583,9 @@ def chosen_inline_result(chosen):
                 bot.edit_message_text(inline_message_id=inline_msg_id, text=frame, parse_mode='Markdown', disable_web_page_preview=True)
                 time.sleep(0.2)
 
+
             # For hidden messages after animation
-            if chosen.result_id == '6':
+            if chosen.result_id == '8':
                 raw = full_mess.rstrip()
                 escaped = escape_md_v2(raw)
                 spoiler = f"||{escaped}||"
