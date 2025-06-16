@@ -584,7 +584,8 @@ def chosen_inline_result(chosen):
                 time.sleep(0.2)
 
             # For hidden messges after animation
-            if chosen.result_id == '6':
+            # result_id '8' corresponds to the hidden version for this animation
+            if chosen.result_id == '8':
                 raw = full_mess.rstrip()
                 escaped = escape_md_v2(raw)
                 spoiler = f"||{escaped}||"

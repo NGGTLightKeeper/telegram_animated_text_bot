@@ -23,7 +23,11 @@ class PendingMessagesModel(models.Model):
     timestamp = models.DateTimeField(default=datetime.datetime(1970, 1, 1, 5, 0, 0), verbose_name="Time:")
 
     def __str__(self):
-        return self.user
+        # __str__ previously referenced a non–existent ``user`` field which
+        # caused an ``AttributeError`` when model instances were displayed in the
+        # Django admin or shell. Use ``lmid`` to provide a meaningful string
+        # representation instead.
+        return str(self.lmid)
 
     class Meta:
         verbose_name = "Pending Message"
