@@ -6,7 +6,7 @@ This repository contains a Telegram bot built with the [pyTelegramBotAPI](https:
 - Python 3.13+
 - MySQL
 - Libraries `Django`, `mysqlclient`, `Pillow`, `pyTelegramBotAPI`
-- Additional libraries can be found in the [telegram_bot_core](https://github.com/RWTLoneWolf/telegram_bot_core) repository
+- Additional libraries can be found in the [telegram_bot_core](https://github.com/NGGTLightKeeper/telegram_bot_core) repository
 
 ## Installation
 1. Create and activate a virtual environment.

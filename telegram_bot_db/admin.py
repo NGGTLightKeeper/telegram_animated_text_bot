@@ -1,4 +1,4 @@
 from django.contrib import admin
-from .models import MessagesModel
+from .models import MessagesModel, PendingMessagesModel
 
-admin.site.register(MessagesModel)
+admin.site.register(MessagesModel, PendingMessagesModel)

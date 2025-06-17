@@ -1,18 +1,18 @@
-BOT_TOKEN = "7625641821:AAH0Q_I8XIDVLre-K2dTp1IGbmQWenpk3iY"
+BOT_TOKEN = ''
 
-MYSQL_HOST = 'localhost'
-MYSQL_USER = 'root'
-MYSQL_PASSWORD = 'Og23062008og@'
-MYSQL_DB = 'testtgbot'
+MYSQL_HOST = ''
+MYSQL_USER = ''
+MYSQL_PASSWORD = ''
+MYSQL_DB = ''
 
 PRINT_MESSAGE_DATA = True
 
 
-NAME_BTN_BACK = "🔙 Назад"
-NAME_BTN_HELP = "⚙️ Помощь"
-NAME_BTN_SUPPORT = "🛠 Тех. поддержка"
+NAME_BTN_BACK = "🔙 Back"
+NAME_BTN_HELP = "⚙️ Help"
+NAME_BTN_SUPPORT = "🛠 Support"
 
 MESS_HELP = "/messages/help.txt"
 MESS_GREETING = "/messages/greeting.txt"
 
-URL_SUPPORT = "https://t.me/RWTLoneWolf"
+URL_SUPPORT = ""
