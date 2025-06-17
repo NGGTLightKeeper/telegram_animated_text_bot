@@ -1,4 +1,4 @@
-# Telegram Text Bot
+# Telegram Animated Text Bot
 
 This repository contains a Telegram bot built with the [pyTelegramBotAPI](https://github.com/eternnoir/pyTelegramBotAPI) library and a minimal Django project for storing message data. The bot replies to `/start` and `/help` commands and supports inline message animations.
 
