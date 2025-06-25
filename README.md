@@ -32,4 +32,4 @@ This repository contains a Telegram bot built with the [pyTelegramBotAPI](https:
 - `messages/` – text files with greeting and help messages
 
 ## License
-Free use is permitted under the terms of the [LICENSE](LICENSE) file.
+This project is licensed under the [MIT License](LICENSE).
